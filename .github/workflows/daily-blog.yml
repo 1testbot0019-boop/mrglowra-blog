@@ -1,31 +1,41 @@
 name: Daily Blog Generator
 
+# Run every day at midnight UTC
 on:
   schedule:
-    - cron: '0 0 * * *'  # every day at midnight UTC
-  workflow_dispatch:
+    - cron: '0 0 * * *'
+  workflow_dispatch:  # Allows manual trigger
 
 jobs:
   generate-and-push:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
 
-      - name: Set up Node.js
+    steps:
+      # Step 1: Checkout the repo
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      # Step 2: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 20
 
-      - name: Install dependencies
+      # Step 3: Install dependencies
+      - name: Install Dependencies
         run: npm install
 
+      # Step 4: Generate AI blog posts
       - name: Generate Posts
         run: node generate.js
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
+      # Step 5: Commit and Push new posts
       - name: Commit and Push
         run: |
           git config user.name "auto-blog-bot"
           git config user.email "auto@mrglowra.com"
           git add posts/
-          git commit -m "Daily automated 5 posts" || echo "No changes to commit"
+          git commit -m "Daily automated 5 AI-generated posts" || echo "No changes to commit"
           git push
