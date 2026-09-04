@@ -36,16 +36,16 @@ async function existingTitles() {
 async function generatePost(topic, titles) {
   if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
 
-  const prompt = `Create one original, genuinely useful 800-1000 word blog article for Mr Glowra, an Indian home-cleaning brand. Topic: ${topic}. Audience: Indian homeowners and families.\n\nSEO requirements: choose a natural search-friendly title; write a compelling 140-160 character description; use the main topic naturally; answer the reader's practical intent; use short sections and clear paragraphs; avoid keyword stuffing.\n\nQuality and safety: give practical, conservative cleaning advice. Never invent laboratory results, certifications, government approvals, medical claims, customer reviews, prices, or unsupported statistics. Never tell readers to mix cleaning chemicals. If discussing acidic toilet cleaners or other chemicals, emphasize following the product label and basic safety precautions. Mention Mr Glowra products naturally only where genuinely relevant and do not make unsupported performance claims.\n\nDo not repeat or closely imitate these existing titles: ${titles.join(' | ') || 'none'}.\n\nReturn ONLY valid JSON with exactly these keys: title, description, category, keywords, content. Keywords must be an array of 5-8 concise search phrases. Content must be plain text with useful headings separated by blank lines; do not use Markdown symbols, HTML, or fake citations.`;
+  const prompt = `Create one original, genuinely useful 800-1000 word blog article for Mr Glowra, an Indian home-cleaning brand. Topic: ${topic}. Audience: Indian homeowners and families.\n\nSEO requirements: choose a natural search-friendly title; write a compelling 140-160 character description; use the main topic naturally; answer the reader's practical intent; use short sections and clear paragraphs; avoid keyword stuffing.\n\nQuality and safety: give practical, conservative cleaning advice. Never invent laboratory results, certifications, government approvals, medical claims, customer reviews, prices, or unsupported statistics. Never tell readers to mix cleaning chemicals. If discussing acidic toilet cleaners or other chemicals, emphasize following the product label and basic safety precautions. Mention Mr Glowra products naturally only where genuinely relevant and do not make unsupported performance claims.\n\nWriting style: sound like a knowledgeable human writer, not a template. Vary sentence length heavily, use natural transitions, occasional first-person experience where appropriate, and include specific practical examples. Avoid phrases such as “In today's fast-paced digital world”, “In the landscape of”, “Furthermore”, “Moreover”, “In conclusion”, “Delve”, “Tapestry”, “Beacon”, “Testament”, and “It is important to remember/note that”. Where a personal experience, observation, or brand-specific fact would strengthen the article but cannot be safely invented, insert a short bracketed placeholder such as [Add your personal experience here]. Do not invent credentials or personal experiences.\n\nDo not repeat or closely imitate these existing titles: ${titles.join(' | ') || 'none'}.\n\nReturn ONLY valid JSON with exactly these keys: title, description, category, keywords, content. Keywords must be an array of 5-8 concise search phrases. Content must be plain text with useful headings separated by blank lines; do not use Markdown symbols, HTML, or fake citations.`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,
-      temperature: 0.65,
+      temperature: 0.72,
       messages: [
-        { role: 'system', content: 'You are a careful SEO editor for a trustworthy Indian consumer brand. Accuracy and usefulness are more important than hype.' },
+        { role: 'system', content: 'You are a careful SEO editor for a trustworthy Indian consumer brand. Accuracy, usefulness, and natural human writing are more important than hype.' },
         { role: 'user', content: prompt }
       ]
     })
@@ -73,7 +73,9 @@ async function generatePost(topic, titles) {
     keywords: Array.isArray(article.keywords) ? article.keywords.map(String).map(x => x.trim()).filter(Boolean).slice(0, 8) : [],
     content: String(article.content).trim(),
     slug,
-    date
+    date,
+    image: `/generated-image/${slug}.svg`,
+    imageAlt: `${String(article.title).trim()} - practical home cleaning guide`
   };
 
   await fs.writeJson(filename, post, { spaces: 2 });
