@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: mrglowra-blog
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: SITE_URL
+        value: https://blog.mrglowra.com
