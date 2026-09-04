@@ -1,39 +1,60 @@
-require('dotenv').config();
 const fs = require('fs-extra');
 const path = require('path');
-const { Configuration, OpenAIApi } = require('openai');
 
 const postsDir = path.join(__dirname, 'posts');
 fs.ensureDirSync(postsDir);
 
-// OpenAI setup
-const configuration = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-const openai = new OpenAIApi(configuration);
+const apiKey = process.env.OPENAI_API_KEY;
+const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
-async function generatePost(index) {
-  const prompt = `Write a short, unique blog post about toilet cleaning tips using Mr Glowra toilet cleaner. Keep it engaging and helpful.`;
+const topics = [
+  'how to clean and maintain bathroom surfaces safely',
+  'simple daily habits for a cleaner home',
+  'how to choose the right floor cleaner for your home',
+  'common toilet cleaning mistakes to avoid',
+  'how to keep floors fresh in Indian homes'
+];
 
-  const response = await openai.createCompletion({
-    model: "text-davinci-003",
-    prompt: prompt,
-    max_tokens: 300
-  });
-
-  const content = response.data.choices[0].text.trim();
-  const now = new Date();
-  const title = `Mr Glowra Toilet Cleaner Tip #${index} - ${now.toDateString()}`;
-  const date = now.toISOString().split('T')[0];
-  const filename = path.join(postsDir, `post-${Date.now()}-${index}.json`);
-
-  fs.writeJsonSync(filename, { title, content, date }, { spaces: 2 });
+function slugify(value) {
+  return value.toLowerCase().trim().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-');
 }
 
-// Generate 5 posts
+async function generatePost(topic) {
+  if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
+
+  const prompt = `Create an original, genuinely useful 700-900 word blog article for Mr Glowra, an Indian home-cleaning brand. Topic: ${topic}. Write for Indian homeowners. Give practical, safe cleaning advice. Do not invent laboratory results, certifications, government approvals, medical claims, or unsupported statistics. Mention Mr Glowra products naturally only where relevant. Use a clear title, a short description, and article content. Return ONLY valid JSON with keys: title, description, category, content.`;
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model,
+      temperature: 0.7,
+      messages: [
+        { role: 'system', content: 'You are a careful SEO content writer. Never fabricate evidence or product claims.' },
+        { role: 'user', content: prompt }
+      ]
+    })
+  });
+
+  if (!response.ok) throw new Error(`OpenAI API error: ${response.status} ${await response.text()}`);
+  const data = await response.json();
+  const raw = data.choices?.[0]?.message?.content?.trim();
+  if (!raw) throw new Error('No article returned by AI');
+
+  const article = JSON.parse(raw.replace(/^```json\s*/i, '').replace(/\s*```$/i, ''));
+  const date = new Date().toISOString().slice(0, 10);
+  const slug = slugify(article.title);
+  const filename = path.join(postsDir, `${date}-${slug}.json`);
+
+  await fs.writeJson(filename, { ...article, slug, date }, { spaces: 2 });
+  console.log(`Created ${filename}`);
+}
+
 (async () => {
-  for (let i = 1; i <= 5; i++) {
-    await generatePost(i);
-  }
-  console.log('5 AI-generated posts created!');
-})();
+  const topic = topics[new Date().getUTCDate() % topics.length];
+  await generatePost(topic);
+})().catch(error => {
+  console.error(error);
+  process.exit(1);
+});
