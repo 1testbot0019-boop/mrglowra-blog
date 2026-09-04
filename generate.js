@@ -12,26 +12,40 @@ const topics = [
   'simple daily habits for a cleaner home',
   'how to choose the right floor cleaner for your home',
   'common toilet cleaning mistakes to avoid',
-  'how to keep floors fresh in Indian homes'
+  'how to keep floors fresh in Indian homes',
+  'how to remove common kitchen and household stains safely',
+  'how often should different areas of an Indian home be cleaned',
+  'floor cleaning mistakes that can damage surfaces',
+  'how to build a simple weekly home cleaning routine',
+  'toilet cleaning routine for a fresher bathroom'
 ];
 
 function slugify(value) {
-  return value.toLowerCase().trim().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-');
+  return value.toLowerCase().trim().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 }
 
-async function generatePost(topic) {
+async function existingTitles() {
+  const files = (await fs.readdir(postsDir)).filter(file => file.endsWith('.json'));
+  const titles = [];
+  for (const file of files) {
+    try { const post = await fs.readJson(path.join(postsDir, file)); if (post.title) titles.push(post.title); } catch {}
+  }
+  return titles;
+}
+
+async function generatePost(topic, titles) {
   if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
 
-  const prompt = `Create an original, genuinely useful 700-900 word blog article for Mr Glowra, an Indian home-cleaning brand. Topic: ${topic}. Write for Indian homeowners. Give practical, safe cleaning advice. Do not invent laboratory results, certifications, government approvals, medical claims, or unsupported statistics. Mention Mr Glowra products naturally only where relevant. Use a clear title, a short description, and article content. Return ONLY valid JSON with keys: title, description, category, content.`;
+  const prompt = `Create one original, genuinely useful 800-1000 word blog article for Mr Glowra, an Indian home-cleaning brand. Topic: ${topic}. Audience: Indian homeowners and families.\n\nSEO requirements: choose a natural search-friendly title; write a compelling 140-160 character description; use the main topic naturally; answer the reader's practical intent; use short sections and clear paragraphs; avoid keyword stuffing.\n\nQuality and safety: give practical, conservative cleaning advice. Never invent laboratory results, certifications, government approvals, medical claims, customer reviews, prices, or unsupported statistics. Never tell readers to mix cleaning chemicals. If discussing acidic toilet cleaners or other chemicals, emphasize following the product label and basic safety precautions. Mention Mr Glowra products naturally only where genuinely relevant and do not make unsupported performance claims.\n\nDo not repeat or closely imitate these existing titles: ${titles.join(' | ') || 'none'}.\n\nReturn ONLY valid JSON with exactly these keys: title, description, category, keywords, content. Keywords must be an array of 5-8 concise search phrases. Content must be plain text with useful headings separated by blank lines; do not use Markdown symbols, HTML, or fake citations.`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,
-      temperature: 0.7,
+      temperature: 0.65,
       messages: [
-        { role: 'system', content: 'You are a careful SEO content writer. Never fabricate evidence or product claims.' },
+        { role: 'system', content: 'You are a careful SEO editor for a trustworthy Indian consumer brand. Accuracy and usefulness are more important than hype.' },
         { role: 'user', content: prompt }
       ]
     })
@@ -43,17 +57,33 @@ async function generatePost(topic) {
   if (!raw) throw new Error('No article returned by AI');
 
   const article = JSON.parse(raw.replace(/^```json\s*/i, '').replace(/\s*```$/i, ''));
-  const date = new Date().toISOString().slice(0, 10);
-  const slug = slugify(article.title);
-  const filename = path.join(postsDir, `${date}-${slug}.json`);
+  if (!article.title || !article.description || !article.content) throw new Error('Generated article is missing required fields');
+  if (titles.some(title => title.toLowerCase().trim() === article.title.toLowerCase().trim())) throw new Error('Generated title duplicates an existing article');
 
-  await fs.writeJson(filename, { ...article, slug, date }, { spaces: 2 });
+  const date = new Date().toISOString().slice(0, 10);
+  let slug = slugify(article.title);
+  if (!slug) slug = `mr-glowra-cleaning-guide-${date}`;
+  let filename = path.join(postsDir, `${date}-${slug}.json`);
+  if (await fs.pathExists(filename)) filename = path.join(postsDir, `${date}-${slug}-${Date.now()}.json`);
+
+  const post = {
+    title: String(article.title).trim(),
+    description: String(article.description).trim().slice(0, 160),
+    category: String(article.category || 'Cleaning Tips').trim(),
+    keywords: Array.isArray(article.keywords) ? article.keywords.map(String).map(x => x.trim()).filter(Boolean).slice(0, 8) : [],
+    content: String(article.content).trim(),
+    slug,
+    date
+  };
+
+  await fs.writeJson(filename, post, { spaces: 2 });
   console.log(`Created ${filename}`);
 }
 
 (async () => {
-  const topic = topics[new Date().getUTCDate() % topics.length];
-  await generatePost(topic);
+  const titles = await existingTitles();
+  const topic = topics[(new Date().getUTCDate() - 1) % topics.length];
+  await generatePost(topic, titles);
 })().catch(error => {
   console.error(error);
   process.exit(1);
