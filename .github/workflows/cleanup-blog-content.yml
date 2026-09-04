@@ -3,6 +3,8 @@ name: Clean Blog Content and Images
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'posts/**'
   workflow_dispatch:
 
 permissions:
