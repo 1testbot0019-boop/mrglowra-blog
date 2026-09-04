@@ -8,6 +8,12 @@ on:
 permissions:
   contents: write
 
+env:
+  NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
+  NPM_CONFIG_FETCH_RETRIES: 5
+  NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: 2000
+  NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: 30000
+
 jobs:
   backfill:
     runs-on: ubuntu-latest
@@ -20,8 +26,10 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
-        run: npm install
+      - name: Reset npm cache and install dependencies
+        run: |
+          npm cache clean --force
+          npm install --prefer-online --no-audit --no-fund
 
       - name: Add missing blog images
         run: node scripts/backfill-images.js
