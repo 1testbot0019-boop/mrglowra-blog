@@ -74,7 +74,7 @@ async function generatePost(topic, titles) {
     content: String(article.content).trim(),
     slug,
     date,
-    image: `/generated-image/${slug}.svg`,
+    image: '/generated-image.svg',
     imageAlt: `${String(article.title).trim()} - practical home cleaning guide`
   };
 
