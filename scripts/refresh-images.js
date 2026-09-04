@@ -49,3 +49,5 @@ async function commons(post){
   }
   console.log(`Updated ${changed} post images`);
 })();
+
+// Triggered image refresh after removal of obsolete SVG fallback.
