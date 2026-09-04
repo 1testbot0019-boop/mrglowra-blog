@@ -13,6 +13,7 @@ env:
   NPM_CONFIG_FETCH_RETRIES: 5
   NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: 2000
   NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: 30000
+  SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
 
 jobs:
   backfill:
@@ -31,7 +32,7 @@ jobs:
           npm cache clean --force
           npm install --prefer-online --no-audit --no-fund
 
-      - name: Add missing blog images
+      - name: Match every post to a relevant image
         run: node scripts/backfill-images.js
 
       - name: Commit changes
@@ -39,9 +40,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git diff --quiet; then
-            echo "No image metadata changes needed."
+            echo "No image changes needed."
             exit 0
           fi
           git add posts/*.json
-          git commit -m "Add hero images to existing blog posts"
+          git commit -m "Match blog hero images to article topics"
           git push
