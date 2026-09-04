@@ -1,11 +1,20 @@
 const fs=require('fs');
 const path=require('path');
 const postsDir=path.join(__dirname,'..','posts');
-const UA='CleanLivingJournal/2.0';
+const UA='CleanLivingJournal/3.0';
 const readJson=f=>JSON.parse(fs.readFileSync(f,'utf8'));
 const writeJson=(f,d)=>fs.writeFileSync(f,JSON.stringify(d,null,2)+'\n','utf8');
 
 function terms(title){return String(title||'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w=>w.length>3&&!['how','what','with','from','your','home','best','clean','cleaning','guide','ways','easy'].includes(w));}
+
+// Only accept stable image hosts. This prevents Google Images from selecting
+// crawler/proxy URLs such as lookaside.fbsbx.com that commonly fail when embedded.
+function allowedImage(url){
+  try{
+    const h=new URL(url).hostname.toLowerCase();
+    return h==='images.pexels.com'||h.endsWith('.pexels.com')||h==='images.unsplash.com'||h.endsWith('.unsplash.com')||h==='cdn.pixabay.com'||h.endsWith('.pixabay.com')||h==='upload.wikimedia.org';
+  }catch{return false;}
+}
 
 async function serp(post){
   const key=process.env.SERPAPI_KEY;
@@ -15,17 +24,17 @@ async function serp(post){
   if(!r.ok) throw Error(`SerpAPI ${r.status}`);
   const d=await r.json();
   const blocked=/logo|icon|diagram|screenshot|poster|illustration|advertisement|product packaging|collage/i;
-  const preferred=/pexels\.com|unsplash\.com|pixabay\.com/i;
+  const preferred=/pexels|unsplash|pixabay/i;
   const t=terms(post.title);
-  const results=(d.images_results||[]).filter(x=>/^https:\/\//.test(x.original||'')&&!blocked.test(`${x.title||''} ${x.source||''}`));
+  const results=(d.images_results||[]).filter(x=>allowedImage(x.original)&&!blocked.test(`${x.title||''} ${x.source||''}`));
   if(!results.length)return null;
   const score=x=>{
     const text=`${x.title||''} ${x.snippet||''} ${x.source||''} ${x.link||''}`.toLowerCase();
-    return t.reduce((n,w)=>n+(text.includes(w)?3:0),0)+(preferred.test(x.source||x.link||'')?2:0);
+    return t.reduce((n,w)=>n+(text.includes(w)?3:0),0)+(preferred.test(`${x.source||''} ${x.link||''}`)?4:0);
   };
   results.sort((a,b)=>score(b)-score(a));
   const x=results[0];
-  return {url:x.original,source:x.source||'Google Images result',source_url:x.link||'',credit:'',license:'Verify image license at source before publishing',license_url:x.link||''};
+  return {url:x.original,source:x.source||'Free image source',source_url:x.link||'',credit:'',license:'Verify image license at source before publishing',license_url:x.link||''};
 }
 
 async function commons(post){
@@ -33,7 +42,7 @@ async function commons(post){
   const r=await fetch(`https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${q}&gsrnamespace=6&gsrlimit=30&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=1200&format=json&origin=*`,{headers:{'User-Agent':UA}});
   if(!r.ok)throw Error(`Commons ${r.status}`);
   const d=await r.json(),blocked=/logo|icon|diagram|map|screenshot|poster|symbol|chart|flag/i;
-  const c=Object.values(d.query?.pages||{}).filter(p=>{const i=p.imageinfo?.[0];return i?.thumburl&&!blocked.test(p.title||'')&&/^image\/(jpeg|png|webp)$/i.test(i.mime||'');});
+  const c=Object.values(d.query?.pages||{}).filter(p=>{const i=p.imageinfo?.[0];return i?.thumburl&&allowedImage(i.thumburl)&&!blocked.test(p.title||'')&&/^image\/(jpeg|png|webp)$/i.test(i.mime||'');});
   if(!c.length)return null;
   const p=c[0],i=p.imageinfo[0],m=i.extmetadata||{};
   const strip=v=>String(v||'').replace(/<[^>]+>/g,'').trim();
@@ -51,5 +60,5 @@ async function commons(post){
       writeJson(file,post); changed++; console.log(`Matched ${f} -> ${im.source}: ${im.url}`);
     }catch(e){console.warn(`Skipped ${f}: ${e.message}`)}
   }
-  console.log(`Matched ${changed} post images to topics`);
+  console.log(`Matched ${changed} post images to approved image hosts`);
 })();
