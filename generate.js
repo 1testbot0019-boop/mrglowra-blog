@@ -51,7 +51,7 @@ const usTopics = [
 ];
 
 function slugify(value) {
-  return value.toLowerCase().trim().replace(/[^a-z0-9\\s-]/g, '').replace(/\\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  return value.toLowerCase().trim().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 }
 
 async function existingTitles() {
@@ -98,7 +98,7 @@ Return ONLY valid JSON with exactly these keys: title, description, category, ke
   const raw = data.choices?.[0]?.message?.content?.trim();
   if (!raw) throw new Error('No article returned by AI');
 
-  const article = JSON.parse(raw.replace(/^```json\\s*/i, '').replace(/\\s*```$/i, ''));
+  const article = JSON.parse(raw.replace(/^```json\s*/i, '').replace(/\s*```$/i, ''));
   if (!article.title || !article.description || !article.content) throw new Error('Generated article is missing required fields');
   if (titles.some(title => title.toLowerCase().trim() === article.title.toLowerCase().trim())) throw new Error('Generated title duplicates an existing article');
 
@@ -127,7 +127,10 @@ Return ONLY valid JSON with exactly these keys: title, description, category, ke
 
 (async () => {
   const titles = await existingTitles();
-  const topic = usTopics[(new Date().getUTCDate() - 1) % usTopics.length];
+  const normalizedExisting = new Set(titles.map(title => slugify(title)));
+  const topic = usTopics.find(candidate => !normalizedExisting.has(slugify(candidate)));
+  if (!topic) throw new Error('All planned US SEO topics have already been published. Add new topics before generating another article.');
+  console.log(`Selected unused US topic: ${topic}`);
   await generatePost(topic, titles);
 })().catch(error => {
   console.error(error);
