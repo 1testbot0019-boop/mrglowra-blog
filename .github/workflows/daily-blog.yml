@@ -32,6 +32,9 @@ jobs:
           npm cache clean --force
           npm install --prefer-online --no-audit --no-fund
 
+      - name: Refresh existing posts that still use the placeholder image
+        run: node scripts/refresh-images.js
+
       - name: Generate one US article
         run: npm run generate
         env:
@@ -46,5 +49,5 @@ jobs:
           git config user.name "mrglowra-blog-bot"
           git config user.email "actions@users.noreply.github.com"
           git add posts/
-          git diff --cached --quiet || git commit -m "Publish daily Mr Glowra US blog article"
+          git diff --cached --quiet || git commit -m "Publish daily US cleaning article and refresh images"
           git push
