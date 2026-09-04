@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '30 3 * * *'
   workflow_dispatch:
+    inputs:
+      batch_size:
+        description: 'Number of US blog posts to generate'
+        required: false
+        default: '10'
 
 permissions:
   contents: write
@@ -34,12 +39,16 @@ jobs:
 
       - name: Refresh existing posts that still use the placeholder image
         run: node scripts/refresh-images.js
+        env:
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
 
       - name: Generate one US article
         run: npm run generate
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: gpt-4o-mini
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          BLOG_BATCH_SIZE: ${{ github.event.inputs.batch_size || '1' }}
 
       - name: Run US SEO audit
         run: node scripts/seo-audit.js
