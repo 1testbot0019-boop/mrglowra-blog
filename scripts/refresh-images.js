@@ -12,6 +12,8 @@ function terms(title){return String(title||'').toLowerCase().replace(/[^a-z0-9 ]
 function allowedImage(url){
   try{
     const h=new URL(url).hostname.toLowerCase();
+    const blocked=['instagram.com','cdninstagram.com','fbcdn.net','fbsbx.com','facebook.com'];
+    if(blocked.some(d=>h===d||h.endsWith('.'+d))) return false;
     return h==='images.pexels.com'||h.endsWith('.pexels.com')||h==='images.unsplash.com'||h.endsWith('.unsplash.com')||h==='cdn.pixabay.com'||h.endsWith('.pixabay.com')||h==='upload.wikimedia.org';
   }catch{return false;}
 }
