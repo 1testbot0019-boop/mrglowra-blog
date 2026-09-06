@@ -1,14 +1,21 @@
-name: Daily Mr Glowra Blog
+name: Daily Mr Glowra Blog - US Schedule
 
 on:
   schedule:
-    - cron: '30 3 * * *'
+    # Run hourly; the workflow itself checks America/New_York so US daylight saving
+    # time is handled automatically.
+    - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
       batch_size:
         description: 'Number of US blog posts to generate'
         required: false
-        default: '10'
+        default: '4'
+      force_run:
+        description: 'Run immediately regardless of US posting hour'
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -20,7 +27,36 @@ env:
   NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: 30000
 
 jobs:
+  us-schedule-check:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - id: check
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "Manual run: generating the requested batch immediately."
+            exit 0
+          fi
+
+          US_HOUR=$(TZ=America/New_York date +%H)
+          echo "Current America/New_York hour: $US_HOUR"
+
+          # Four daily US publishing slots: 08:00, 12:00, 16:00, and 20:00 Eastern.
+          case "$US_HOUR" in
+            08|12|16|20)
+              echo "should_run=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
   generate-and-publish:
+    needs: us-schedule-check
+    if: needs.us-schedule-check.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -42,7 +78,7 @@ jobs:
         env:
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
 
-      - name: Generate one US article
+      - name: Generate one US article for this US time slot
         run: npm run generate
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -58,5 +94,5 @@ jobs:
           git config user.name "mrglowra-blog-bot"
           git config user.email "actions@users.noreply.github.com"
           git add posts/
-          git diff --cached --quiet || git commit -m "Publish daily US cleaning article and refresh images"
+          git diff --cached --quiet || git commit -m "Publish US cleaning article"
           git push
