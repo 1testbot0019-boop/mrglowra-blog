@@ -44,7 +44,6 @@ jobs:
           US_HOUR=$(TZ=America/New_York date +%H)
           echo "Current America/New_York hour: $US_HOUR"
 
-          # Four daily US publishing slots: 08:00, 12:00, 16:00, and 20:00 Eastern.
           case "$US_HOUR" in
             08|12|16|20)
               echo "should_run=true" >> "$GITHUB_OUTPUT"
@@ -73,12 +72,7 @@ jobs:
           npm cache clean --force
           npm install --prefer-online --no-audit --no-fund
 
-      - name: Refresh existing posts that still use the placeholder image
-        run: node scripts/refresh-images.js
-        env:
-          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
-
-      - name: Generate one US article for this US time slot
+      - name: Generate US article for this US time slot
         run: npm run generate
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -86,13 +80,18 @@ jobs:
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
           BLOG_BATCH_SIZE: ${{ github.event.inputs.batch_size || '1' }}
 
+      - name: Replace generated images with strictly title-matched images
+        run: node scripts/refresh-images.js
+        env:
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+
       - name: Run US SEO audit
         run: node scripts/seo-audit.js
 
-      - name: Publish article to GitHub
+      - name: Publish article and image updates to GitHub
         run: |
           git config user.name "mrglowra-blog-bot"
           git config user.email "actions@users.noreply.github.com"
           git add posts/
-          git diff --cached --quiet || git commit -m "Publish US cleaning article"
+          git diff --cached --quiet || git commit -m "Publish US cleaning article with relevant images"
           git push
