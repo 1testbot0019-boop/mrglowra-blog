@@ -25,6 +25,19 @@ function escapeHtml(value = '') { return String(value).replace(/&/g, '&amp;').re
 function slugify(value = '') { return String(value).toLowerCase().trim().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, ''); }
 function stripMarkup(value = '') { return String(value).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim(); }
 function postUrl(slug) { return `${SITE_URL}/blog/${encodeURIComponent(slug)}`; }
+const IMAGE_FALLBACK = 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1600&q=85';
+function isApprovedImageUrl(value = '') {
+  try {
+    const host = new URL(String(value)).hostname.toLowerCase();
+    const blocked = ['instagram.com','cdninstagram.com','fbcdn.net','fbsbx.com','facebook.com'];
+    if (blocked.some(domain => host === domain || host.endsWith('.' + domain))) return false;
+    return host === 'images.pexels.com' || host.endsWith('.pexels.com') ||
+      host === 'images.unsplash.com' || host.endsWith('.unsplash.com') ||
+      host === 'cdn.pixabay.com' || host.endsWith('.pixabay.com') ||
+      host === 'upload.wikimedia.org';
+  } catch { return false; }
+}
+function safeImageUrl(value = '') { return isApprovedImageUrl(value) ? String(value) : IMAGE_FALLBACK; }
 
 async function getPosts() {
   const files = (await fs.readdir(postsDir)).filter(file => file.endsWith('.json'));
