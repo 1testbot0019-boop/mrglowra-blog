@@ -2,12 +2,10 @@ name: Daily Mr Glowra Blog - US Schedule
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - '.github/triggers/generate-10-blogs.trigger'
   schedule:
-    # Run hourly. America/New_York is checked inside the workflow so DST is automatic.
     - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
@@ -41,6 +39,7 @@ jobs:
     outputs:
       should_run: ${{ steps.check.outputs.should_run }}
       slot: ${{ steps.check.outputs.slot }}
+      batch_size: ${{ steps.check.outputs.batch_size }}
     steps:
       - id: check
         shell: bash
@@ -51,19 +50,14 @@ jobs:
             echo "batch_size=${{ github.event.inputs.batch_size || '1' }}" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
           if [ "${{ github.event_name }}" = "push" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "slot=commit-10-blog-batch" >> "$GITHUB_OUTPUT"
             echo "batch_size=10" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
           US_HOUR=$(TZ=America/New_York date +%H)
           US_DATE=$(TZ=America/New_York date +%F)
-          echo "US date: $US_DATE"
-          echo "US hour: $US_HOUR"
-
           case "$US_HOUR" in
             08|12|16|20)
               echo "should_run=true" >> "$GITHUB_OUTPUT"
@@ -87,18 +81,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-
-      - name: Reset npm cache and install dependencies
-        run: |
-          npm cache clean --force
-          npm install --prefer-online --no-audit --no-fund
-
+          cache: false
+      - name: Install dependencies
+        run: npm install --prefer-online --no-audit --no-fund
       - name: Generate requested blog batch
         run: npm run generate
         env:
@@ -106,28 +95,23 @@ jobs:
           OPENAI_MODEL: gpt-4o-mini
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
           BLOG_BATCH_SIZE: ${{ needs.us-schedule-check.outputs.batch_size }}
-
       - name: Replace generated images with strictly title-matched images
         run: node scripts/refresh-images.js
         env:
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
-
       - name: Run US SEO audit
         run: node scripts/seo-audit.js
-
       - name: Publish article and image updates to GitHub
         run: |
           git config user.name "mrglowra-blog-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add posts/
+          git add posts/ images/ . || true
           if git diff --cached --quiet; then
             echo "ERROR: No new or changed post was generated for slot ${{ needs.us-schedule-check.outputs.slot }}"
             exit 1
           fi
-          git commit -m "Publish US blog post (${{ needs.us-schedule-check.outputs.slot }})"
+          git commit -m "Publish blog batch (${{ needs.us-schedule-check.outputs.slot }})"
           git pull --rebase origin main
           git push origin HEAD:main
-
       - name: Confirm publishing completed
-        run: |
-          echo "Successfully published for US slot: ${{ needs.us-schedule-check.outputs.slot }}"
+        run: echo "Published ${{ needs.us-schedule-check.outputs.batch_size }} blog post(s)."
