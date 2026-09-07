@@ -2,15 +2,14 @@ name: Daily Mr Glowra Blog - US Schedule
 
 on:
   schedule:
-    # Run hourly; the workflow itself checks America/New_York so US daylight saving
-    # time is handled automatically.
+    # Run hourly. America/New_York is checked inside the workflow so DST is automatic.
     - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
       batch_size:
-        description: 'Number of US blog posts to generate'
+        description: 'Number of posts to generate immediately'
         required: false
-        default: '4'
+        default: '1'
       force_run:
         description: 'Run immediately regardless of US posting hour'
         required: false
@@ -20,7 +19,12 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: mrglowra-us-blog-publishing
+  cancel-in-progress: false
+
 env:
+  TZ: America/New_York
   NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
   NPM_CONFIG_FETCH_RETRIES: 5
   NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: 2000
@@ -31,25 +35,30 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.check.outputs.should_run }}
+      slot: ${{ steps.check.outputs.slot }}
     steps:
       - id: check
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "Manual run: generating the requested batch immediately."
+            echo "slot=manual" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           US_HOUR=$(TZ=America/New_York date +%H)
-          echo "Current America/New_York hour: $US_HOUR"
+          US_DATE=$(TZ=America/New_York date +%F)
+          echo "US date: $US_DATE"
+          echo "US hour: $US_HOUR"
 
           case "$US_HOUR" in
             08|12|16|20)
               echo "should_run=true" >> "$GITHUB_OUTPUT"
+              echo "slot=$US_DATE-$US_HOUR" >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo "should_run=false" >> "$GITHUB_OUTPUT"
+              echo "slot=none" >> "$GITHUB_OUTPUT"
               ;;
           esac
 
@@ -57,9 +66,12 @@ jobs:
     needs: us-schedule-check
     if: needs.us-schedule-check.outputs.should_run == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -72,7 +84,17 @@ jobs:
           npm cache clean --force
           npm install --prefer-online --no-audit --no-fund
 
-      - name: Generate US article for this US time slot
+      - name: Generate exactly one scheduled US article
+        if: github.event_name == 'schedule'
+        run: npm run generate
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: gpt-4o-mini
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          BLOG_BATCH_SIZE: '1'
+
+      - name: Generate manual batch
+        if: github.event_name == 'workflow_dispatch'
         run: npm run generate
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -93,5 +115,14 @@ jobs:
           git config user.name "mrglowra-blog-bot"
           git config user.email "actions@users.noreply.github.com"
           git add posts/
-          git diff --cached --quiet || git commit -m "Publish US cleaning article with relevant images"
-          git push
+          if git diff --cached --quiet; then
+            echo "ERROR: No new or changed post was generated for slot ${{ needs.us-schedule-check.outputs.slot }}"
+            exit 1
+          fi
+          git commit -m "Publish US blog post (${{ needs.us-schedule-check.outputs.slot }})"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Confirm publishing completed
+        run: |
+          echo "Successfully published for US slot: ${{ needs.us-schedule-check.outputs.slot }}"
