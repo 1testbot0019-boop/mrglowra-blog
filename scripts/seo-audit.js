@@ -3,6 +3,23 @@ const path = require('path');
 
 const postsDir = path.join(__dirname, '..', 'posts');
 
+function isApprovedImage(value = '') {
+  if (!value) return false;
+  if (value === '/generated-image.svg') return true;
+  if (value.startsWith('/images/') && value.length > '/images/'.length) return true;
+  try {
+    const host = new URL(String(value)).hostname.toLowerCase();
+    const blocked = ['instagram.com', 'cdninstagram.com', 'fbcdn.net', 'fbsbx.com', 'facebook.com'];
+    if (blocked.some(domain => host === domain || host.endsWith('.' + domain))) return false;
+    return host === 'images.pexels.com' || host.endsWith('.pexels.com') ||
+      host === 'images.unsplash.com' || host.endsWith('.unsplash.com') ||
+      host === 'cdn.pixabay.com' || host.endsWith('.pixabay.com') ||
+      host === 'upload.wikimedia.org';
+  } catch {
+    return false;
+  }
+}
+
 (async () => {
   const files = (await fs.readdir(postsDir)).filter(file => file.endsWith('.json'));
   if (!files.length) throw new Error('No post files found');
@@ -28,8 +45,11 @@ const postsDir = path.join(__dirname, '..', 'posts');
     if (!post.content || post.content.trim().length < 2500) {
       throw new Error(`SEO audit failed: article is too short for ${file}`);
     }
-    if (post.image !== '/generated-image.svg') {
-      throw new Error(`SEO audit failed: missing self-hosted image for ${file}`);
+    if (!isApprovedImage(post.image)) {
+      throw new Error(`SEO audit failed: missing approved topic-matched image for ${file}`);
+    }
+    if (post.image_source && /instagram|facebook|cdninstagram|fbcdn|fbsbx/i.test(post.image_source)) {
+      throw new Error(`SEO audit failed: blocked social image source for ${file}`);
     }
   }
 
