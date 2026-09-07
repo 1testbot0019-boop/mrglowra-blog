@@ -1,6 +1,11 @@
 name: Daily Mr Glowra Blog - US Schedule
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/triggers/generate-10-blogs.trigger'
   schedule:
     # Run hourly. America/New_York is checked inside the workflow so DST is automatic.
     - cron: '0 * * * *'
@@ -43,6 +48,14 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "slot=manual" >> "$GITHUB_OUTPUT"
+            echo "batch_size=${{ github.event.inputs.batch_size || '1' }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "slot=commit-10-blog-batch" >> "$GITHUB_OUTPUT"
+            echo "batch_size=10" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -55,10 +68,12 @@ jobs:
             08|12|16|20)
               echo "should_run=true" >> "$GITHUB_OUTPUT"
               echo "slot=$US_DATE-$US_HOUR" >> "$GITHUB_OUTPUT"
+              echo "batch_size=1" >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo "should_run=false" >> "$GITHUB_OUTPUT"
               echo "slot=none" >> "$GITHUB_OUTPUT"
+              echo "batch_size=0" >> "$GITHUB_OUTPUT"
               ;;
           esac
 
@@ -84,23 +99,13 @@ jobs:
           npm cache clean --force
           npm install --prefer-online --no-audit --no-fund
 
-      - name: Generate exactly one scheduled US article
-        if: github.event_name == 'schedule'
+      - name: Generate requested blog batch
         run: npm run generate
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: gpt-4o-mini
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
-          BLOG_BATCH_SIZE: '1'
-
-      - name: Generate manual batch
-        if: github.event_name == 'workflow_dispatch'
-        run: npm run generate
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: gpt-4o-mini
-          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
-          BLOG_BATCH_SIZE: ${{ github.event.inputs.batch_size || '1' }}
+          BLOG_BATCH_SIZE: ${{ needs.us-schedule-check.outputs.batch_size }}
 
       - name: Replace generated images with strictly title-matched images
         run: node scripts/refresh-images.js
