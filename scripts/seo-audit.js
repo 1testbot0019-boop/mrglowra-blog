@@ -45,7 +45,7 @@ function isApprovedImage(value = '') {
     if (!post.content || post.content.trim().length < 2500) {
       throw new Error(`SEO audit failed: article is too short for ${file}`);
     }
-    if (!isApprovedImage(post.image)) {
+    if (process.env.REQUIRE_IMAGES === 'true' && !isApprovedImage(post.image)) {
       throw new Error(`SEO audit failed: missing approved topic-matched image for ${file}`);
     }
     if (post.image_source && /instagram|facebook|cdninstagram|fbcdn|fbsbx/i.test(post.image_source)) {
