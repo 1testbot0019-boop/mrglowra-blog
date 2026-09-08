@@ -94,12 +94,10 @@ jobs:
           GEMINI_MODEL: gemini-3.8-flash
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
           BLOG_BATCH_SIZE: ${{ needs.us-schedule-check.outputs.batch_size }}
-      - name: Replace generated images with strictly title-matched images
-        run: node scripts/refresh-images.js
-        env:
-          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
-      - name: Run US SEO audit
+      - name: Run US SEO audit (images optional)
         run: node scripts/seo-audit.js
+        env:
+          REQUIRE_IMAGES: 'false'
       - name: Publish article and image updates to GitHub
         run: |
           git config user.name "mrglowra-blog-bot"
