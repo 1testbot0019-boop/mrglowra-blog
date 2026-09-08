@@ -1,0 +1,54 @@
+name: Generate 10 Deep Cleaning Posts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/triggers/generate-deep-cleaning-10.trigger'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mrglowra-deep-cleaning-batch
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install --prefer-online --no-audit --no-fund
+      - name: Generate 10 Deep Cleaning articles
+        run: node scripts/generate-deep-cleaning-10.js
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: gemini-3.8-flash
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+      - name: Add topic-matched image galleries and enforce uniqueness
+        run: node scripts/refresh-images-v2.js
+        env:
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+      - name: Run US SEO audit
+        run: node scripts/seo-audit.js
+        env:
+          REQUIRE_IMAGES: 'true'
+      - name: Publish posts
+        run: |
+          git config user.name "mrglowra-blog-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add posts/
+          git diff --cached --name-only -- posts/
+          git commit -m "Publish 10 Deep Cleaning SEO posts" || echo "No changes to commit"
+          git pull --rebase origin main
+          git push origin HEAD:main
