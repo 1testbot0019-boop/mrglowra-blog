@@ -4,6 +4,7 @@ const postsDir=path.join(__dirname,'..','posts');
 const UA='CleanLivingJournal/5.0';
 const readJson=f=>JSON.parse(fs.readFileSync(f,'utf8'));
 const writeJson=(f,d)=>fs.writeFileSync(f,JSON.stringify(d,null,2)+'\n','utf8');
+// Global image uniqueness guard: repeated primary images are repaired, unique images are preserved.
 const STOP=new Set(['how','what','when','where','why','which','with','from','your','home','best','clean','cleaning','guide','ways','easy','step','steps','the','and','for','off','out','into','without','does','can','get','remove','tips','checklist','natural','common']);
 function terms(title){return [...new Set(String(title||'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w=>w.length>3&&!STOP.has(w)))];}
 function phrase(title){return String(title||'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();}
