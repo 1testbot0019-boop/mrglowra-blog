@@ -14,7 +14,10 @@ const FALLBACK='https://images.unsplash.com/photo-1581578731548-c64695cc6952?aut
 function esc(v=''){return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#039;')}
 function slugify(v=''){return String(v).toLowerCase().trim().replace(/[^a-z0-9\s-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'')}
 function strip(v=''){return String(v).replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim()}
-function postUrl(s){return `${SITE_URL}/blog/${encodeURIComponent(s)}`}\nfunction categorySlug(v=''){return slugify(v)}\nfunction categoryUrl(v){return `${SITE_URL}/category/${encodeURIComponent(categorySlug(v))}`}\nconst NAV_CATEGORIES=['Deep Cleaning','Home Organization','Green & DIY','Appliance Care','Odor & Maintenance'];
+function postUrl(s){return `${SITE_URL}/blog/${encodeURIComponent(s)}`}
+function categorySlug(v=''){return slugify(v)}
+function categoryUrl(v){return `${SITE_URL}/category/${encodeURIComponent(categorySlug(v))}`}
+const NAV_CATEGORIES=['Deep Cleaning','Home Organization','Green & DIY','Appliance Care','Odor & Maintenance'];
 function approved(v=''){try{const h=new URL(v).hostname.toLowerCase();if(/instagram|facebook|pinterest|tiktok/.test(h))return false;return /(^|\.)images\.pexels\.com$|(^|\.)pexels\.com$|(^|\.)images\.unsplash\.com$|(^|\.)unsplash\.com$|(^|\.)cdn\.pixabay\.com$|(^|\.)pixabay\.com$|(^|\.)upload\.wikimedia\.org$/.test(h)}catch{return false}}
 function safe(v){return approved(v)?String(v):FALLBACK}
 async function getPosts(){const fsx=(await fs.readdir(postsDir)).filter(f=>f.endsWith('.json'));const out=[];for(const f of fsx){try{const d=await fs.readJson(path.join(postsDir,f));out.push({...d,slug:d.slug||slugify(d.title||f.replace(/\.json$/,'')),date:d.date||new Date().toISOString().slice(0,10)})}catch{}}return out.sort((a,b)=>new Date(b.date)-new Date(a.date))}
