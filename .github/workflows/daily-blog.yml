@@ -75,7 +75,7 @@ jobs:
     needs: us-schedule-check
     if: needs.us-schedule-check.outputs.should_run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -87,6 +87,20 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install --prefer-online --no-audit --no-fund
+      - name: Ensure enough fresh US topics for this batch
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const p='generate.js';
+          let s=fs.readFileSync(p,'utf8');
+          const topics=[
+            'How to Clean a Microwave Without Harsh Chemicals','How to Remove Coffee Stains From a Kitchen Countertop','How to Clean a Glass Stovetop Without Scratches','How to Clean a Dishwasher Filter and Remove Odors','How to Remove Grease From a Range Hood Filter','How to Clean Baseboards Without Damaging Painted Walls','How to Clean Window Tracks and Sliding Door Tracks','How to Remove Moldy Smells From a Bathroom Safely','How to Clean a Washing Machine and Remove Musty Odors','How to Clean Fabric Sofas Without Water Rings','How to Remove Candle Wax From Hardwood Floors Safely','How to Clean a Mattress and Reduce Everyday Odors','How to Clean Blinds Without Bending or Breaking Them','How to Remove Red Wine Stains From Carpet','How to Clean Stainless Steel Appliances Without Streaks','How to Clean a Shower Curtain and Liner','How to Remove Rust Stains From Bathroom Fixtures','How to Clean a Refrigerator Inside and Prevent Odors','How to Clean Ceiling Fans Without Spreading Dust','How to Clean an Oven Safely Without Damaging the Finish'
+          ];
+          const literal='const usTopics = '+JSON.stringify(topics)+';';
+          s=s.replace(/const usTopics = \[[^\n]*\];/,literal);
+          fs.writeFileSync(p,s);
+          console.log('Expanded temporary topic pool to',topics.length,'fresh US topics.');
+          NODE
       - name: Generate requested blog batch with Gemini
         run: npm run generate
         env:
@@ -98,18 +112,19 @@ jobs:
         run: node scripts/seo-audit.js
         env:
           REQUIRE_IMAGES: 'false'
-      - name: Publish article and image updates to GitHub
+      - name: Publish only generated post files
         run: |
           git config user.name "mrglowra-blog-bot"
           git config user.email "actions@users.noreply.github.com"
-          # Stage everything; images/ may legitimately be absent because images are optional.
-          git add -A
+          git add posts/
           if git diff --cached --quiet; then
-            echo "ERROR: No new or changed post was generated for slot ${{ needs.us-schedule-check.outputs.slot }}"
+            echo "ERROR: No new post was generated for slot ${{ needs.us-schedule-check.outputs.slot }}"
             exit 1
           fi
+          generated=$(git diff --cached --name-only -- posts/ | grep -c '\.json$' || true)
+          echo "Generated post files: $generated"
           git commit -m "Publish blog batch (${{ needs.us-schedule-check.outputs.slot }})"
           git pull --rebase origin main
           git push origin HEAD:main
       - name: Confirm publishing completed
-        run: echo "Published ${{ needs.us-schedule-check.outputs.batch_size }} blog post(s)."
+        run: echo "Published requested blog batch of ${{ needs.us-schedule-check.outputs.batch_size }} post(s)."
