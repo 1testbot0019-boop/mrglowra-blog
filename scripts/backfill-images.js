@@ -1,3 +1,2 @@
-// Legacy entry point retained for the Backfill Blog Images workflow.
-// All posts are now refreshed with a topic-matched image via SerpAPI.
-require('./refresh-images');
+// Backfill all existing posts with 3-5 topic-matched images.
+require('./refresh-images-v2');
