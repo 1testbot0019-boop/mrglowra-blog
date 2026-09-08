@@ -11,3 +11,5 @@ services:
         value: 20
       - key: SITE_URL
         value: https://blog.mrglowra.com
+      - key: ADSENSE_CLIENT
+        value: ca-pub-3504041414011224
