@@ -1,8 +1,6 @@
 name: Backfill Blog Images
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -13,36 +11,46 @@ env:
   NPM_CONFIG_FETCH_RETRIES: 5
   NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: 2000
   NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: 30000
-  SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
 
 jobs:
   backfill:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
-      - name: Reset npm cache and install dependencies
+      - name: Install locked dependencies
+        run: npm ci --prefer-online --no-audit --no-fund
+
+      - name: Match every post to a relevant Pixabay image
+        run: node scripts/refresh-images-v2.js
+        env:
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+
+      - name: Commit image changes only
+        shell: bash
         run: |
-          npm cache clean --force
-          npm install --prefer-online --no-audit --no-fund
+          set -e
+          git config user.name "mrglowra-blog-bot"
+          git config user.email "actions@users.noreply.github.com"
 
-      - name: Match every post to a relevant image
-        run: node scripts/backfill-images.js
+          # Never commit node_modules or package-lock changes produced by tooling.
+          git restore --worktree --staged package-lock.json 2>/dev/null || true
+          git add posts/ public/images/
 
-      - name: Commit changes
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet; then
-            echo "No image changes needed."
+          if git diff --cached --quiet; then
+            echo "No post or image changes to commit."
             exit 0
           fi
-          git add posts/*.json
-          git commit -m "Match blog hero images to article topics"
-          git push
+
+          git commit -m "Backfill topic-matched Pixabay images"
+          git pull --rebase origin main
+          git push origin HEAD:main
