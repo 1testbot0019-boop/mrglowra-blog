@@ -97,11 +97,15 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install --prefer-online --no-audit --no-fund
-      - name: Generate requested blog batch with Gemini
+      - name: Generate requested blog batch (Claude -> DeepSeek -> Gemini)
         run: npm run generate
         env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_MODEL: claude-sonnet-5
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_MODEL: deepseek-v4-flash
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: gemini-3.6-flash
+          GEMINI_MODEL: gemini-3.8-flash
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
           BLOG_BATCH_SIZE: ${{ needs.us-schedule-check.outputs.batch_size }}
       - name: Add 3-5 topic-matched images to every post
