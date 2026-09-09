@@ -14,6 +14,7 @@ on:
         description: 'Number of posts to generate immediately'
         required: false
         default: '10'
+        type: string
       force_run:
         description: 'Run immediately regardless of US posting hour'
         required: false
@@ -45,18 +46,32 @@ jobs:
       - id: check
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "slot=manual" >> "$GITHUB_OUTPUT"
-            echo "batch_size=${{ github.event.inputs.batch_size || '10' }}" >> "$GITHUB_OUTPUT"
+          EVENT="${{ github.event_name }}"
+          FORCE_RUN="${{ github.event.inputs.force_run || 'false' }}"
+
+          # Manual runs always execute when force_run is enabled (the default).
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            if [ "$FORCE_RUN" = "true" ]; then
+              echo "should_run=true" >> "$GITHUB_OUTPUT"
+              echo "slot=manual" >> "$GITHUB_OUTPUT"
+              echo "batch_size=${{ github.event.inputs.batch_size || '10' }}" >> "$GITHUB_OUTPUT"
+            else
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              echo "slot=manual-disabled" >> "$GITHUB_OUTPUT"
+              echo "batch_size=0" >> "$GITHUB_OUTPUT"
+            fi
             exit 0
           fi
-          if [ "${{ github.event_name }}" = "push" ]; then
+
+          # Trigger commits are intentional immediate runs.
+          if [ "$EVENT" = "push" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "slot=commit-blog-batch" >> "$GITHUB_OUTPUT"
             echo "batch_size=10" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          # Scheduled runs publish at the configured US Eastern posting hours.
           US_HOUR=$(TZ=America/New_York date +%H)
           US_DATE=$(TZ=America/New_York date +%F)
           case "$US_HOUR" in
