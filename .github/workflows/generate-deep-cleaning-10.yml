@@ -33,7 +33,7 @@ jobs:
         run: node scripts/generate-deep-cleaning-10.js
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: gemini-3.8-flash
+          GEMINI_MODEL: gemini-2.5-flash
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
       - name: Add topic-matched image galleries and enforce uniqueness
         run: node scripts/refresh-images-v2.js
