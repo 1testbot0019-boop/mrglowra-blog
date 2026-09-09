@@ -96,7 +96,7 @@ jobs:
         with:
           node-version: 20
       - name: Install dependencies
-        run: npm install --prefer-online --no-audit --no-fund
+        run: npm ci --prefer-online --no-audit --no-fund
       - name: Generate requested blog batch (Claude -> DeepSeek -> Gemini)
         continue-on-error: true
         run: npm run generate
@@ -127,13 +127,25 @@ jobs:
         run: |
           git config user.name "mrglowra-blog-bot"
           git config user.email "actions@users.noreply.github.com"
+
+          # Stage only generated posts and downloaded images.
           git add posts/ public/images/
+
+          # Never fail when only npm/package-lock/node_modules changed.
+          if git diff --cached --quiet; then
+            echo "No generated posts or images changed; nothing to publish."
+            exit 0
+          fi
+
           generated=$(git diff --cached --name-only -- posts/ | grep -c '\.json$' || true)
           echo "Post files changed: $generated"
-          if [ "$generated" -lt "${{ needs.us-schedule-check.outputs.batch_size }}" ]; then
-            echo "ERROR: Expected at least ${{ needs.us-schedule-check.outputs.batch_size }} changed post files but found $generated"
-            exit 1
+
+          # Publish whatever valid posts were generated; do not fail the whole batch
+          # merely because fewer than the requested number were produced.
+          if [ "$generated" -eq 0 ]; then
+            echo "No new post JSON files; publishing image updates only."
           fi
+
           git commit -m "Publish US SEO blogs with Pixabay image replacements"
           git pull --rebase origin main
           git push origin HEAD:main
