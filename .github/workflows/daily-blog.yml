@@ -48,8 +48,6 @@ jobs:
         run: |
           EVENT="${{ github.event_name }}"
           FORCE_RUN="${{ github.event.inputs.force_run || 'false' }}"
-
-          # Manual runs always execute when force_run is enabled (the default).
           if [ "$EVENT" = "workflow_dispatch" ]; then
             if [ "$FORCE_RUN" = "true" ]; then
               echo "should_run=true" >> "$GITHUB_OUTPUT"
@@ -62,16 +60,12 @@ jobs:
             fi
             exit 0
           fi
-
-          # Trigger commits are intentional immediate runs.
           if [ "$EVENT" = "push" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "slot=commit-blog-batch" >> "$GITHUB_OUTPUT"
             echo "batch_size=10" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
-          # Scheduled runs publish at the configured US Eastern posting hours.
           US_HOUR=$(TZ=America/New_York date +%H)
           US_DATE=$(TZ=America/New_York date +%F)
           case "$US_HOUR" in
@@ -107,7 +101,7 @@ jobs:
         run: npm run generate
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: gemini-3.8-flash
+          GEMINI_MODEL: gemini-2.5-flash
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
           BLOG_BATCH_SIZE: ${{ needs.us-schedule-check.outputs.batch_size }}
       - name: Add 3-5 topic-matched images to every post
