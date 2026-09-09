@@ -1,6 +1,6 @@
 {
   "name": "mrglowra-blog",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "private": true,
   "description": "SEO-friendly Mr Glowra blog service",
   "main": "server.js",
@@ -12,6 +12,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "express": "^4.21.2",
     "cors": "^2.8.5",
     "cookie": "^0.7.2",
     "fs-extra": "^11.3.0"
