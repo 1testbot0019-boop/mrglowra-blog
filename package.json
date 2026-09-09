@@ -1,12 +1,12 @@
 {
   "name": "mrglowra-blog",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "description": "SEO-friendly Mr Glowra blog service",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "generate": "node generate.js"
+    "generate": "node provider-router.js"
   },
   "engines": {
     "node": ">=20"
@@ -14,7 +14,6 @@
   "dependencies": {
     "cors": "^2.8.5",
     "cookie": "^0.7.2",
-    "express": "4.21.2",
     "fs-extra": "^11.3.0"
   }
 }
