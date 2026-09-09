@@ -105,30 +105,29 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           DEEPSEEK_MODEL: deepseek-v4-flash
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: gemini-3.8-flash
-          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          GEMINI_MODEL: gemini-3.6-flash
           BLOG_BATCH_SIZE: ${{ needs.us-schedule-check.outputs.batch_size }}
-      - name: Add 3-5 topic-matched images to every post
+      - name: Add 3-5 topic-matched Pixabay images to every post
         run: node scripts/refresh-images-v2.js
         env:
-          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
       - name: Run US SEO audit (images required)
         run: node scripts/seo-audit.js
         env:
           REQUIRE_IMAGES: 'true'
-      - name: Publish generated and image-updated post files
+      - name: Publish generated posts and downloaded images
         run: |
           git config user.name "mrglowra-blog-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add posts/
+          git add posts/ public/images/
           generated=$(git diff --cached --name-only -- posts/ | grep -c '\.json$' || true)
           echo "Post files changed: $generated"
           if [ "$generated" -lt "${{ needs.us-schedule-check.outputs.batch_size }}" ]; then
             echo "ERROR: Expected at least ${{ needs.us-schedule-check.outputs.batch_size }} changed post files but found $generated"
             exit 1
           fi
-          git commit -m "Publish blog batch with relevant image galleries"
+          git commit -m "Publish blog batch with Pixabay images"
           git pull --rebase origin main
           git push origin HEAD:main
       - name: Confirm publishing completed
-        run: echo "Published requested blog batch with topic-matched image galleries."
+        run: echo "Published requested blog batch with topic-matched Pixabay image galleries."
