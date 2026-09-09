@@ -1,7 +1,8 @@
 Publish requested blog batch now.
 Batch size: 10
-Priority: generate and publish ten SEO-focused posts immediately.
+Priority: generate and publish ten SEO-focused US posts immediately.
 Target article length: approximately 1,800-2,100 words; prioritize search intent and avoid filler.
-Images: generate or select 3-5 topic-matched images per post when available; Google Images thumbnail fallback is allowed when needed.
-Force publish immediately after generation and SEO validation.
-Timestamp: 2026-09-09T15:55:00+05:30
+AI provider order: Claude -> DeepSeek -> Gemini.
+Images: replace existing post images with 3-5 unique, topic-matched Pixabay images per post; no SerpAPI or Google Images.
+Force publish immediately after generation, image replacement, and SEO validation.
+Timestamp: 2026-09-09T16:00:00+05:30
