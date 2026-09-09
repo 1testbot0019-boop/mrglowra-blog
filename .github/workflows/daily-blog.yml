@@ -98,14 +98,22 @@ jobs:
       - name: Install dependencies
         run: npm install --prefer-online --no-audit --no-fund
       - name: Generate requested blog batch (Claude -> DeepSeek -> Gemini)
+        continue-on-error: true
         run: npm run generate
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_MODEL: ${{ secrets.CLAUDE_MODEL || 'claude-sonnet-5' }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          DEEPSEEK_MODEL: ${{ secrets.DEEPSEEK_MODEL || 'deepseek-chat' }}
+          DEEPSEEK_MODEL: ${{ secrets.DEEPSEEK_MODEL || 'deepseek-v4-flash' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: gemini-3.8-flash
+          BLOG_BATCH_SIZE: ${{ needs.us-schedule-check.outputs.batch_size }}
+      - name: Fallback generation with GitHub Models if primary providers fail
+        run: node scripts/generate-github-models-fallback.js
+        env:
+          GITHUB_MODELS_TOKEN: ${{ secrets.GITHUB_MODELS_TOKEN }}
+          GITHUB_MODELS_MODEL: openai/gpt-4.1-mini
+          GITHUB_TOKEN: ${{ github.token }}
           BLOG_BATCH_SIZE: ${{ needs.us-schedule-check.outputs.batch_size }}
       - name: Replace all post images with unique topic-matched Pixabay images
         run: node scripts/refresh-images-v2.js
