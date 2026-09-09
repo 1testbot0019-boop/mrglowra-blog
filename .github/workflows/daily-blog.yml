@@ -111,7 +111,7 @@ jobs:
       - name: Fallback generation with GitHub Models if primary providers fail
         run: node scripts/generate-github-models-fallback.js
         env:
-          GITHUB_MODELS_TOKEN: ${{ secrets.GITHUB_MODELS_TOKEN }}
+          MODELS_TOKEN: ${{ secrets.MODELS_TOKEN }}
           GITHUB_MODELS_MODEL: openai/gpt-4.1-mini
           GITHUB_TOKEN: ${{ github.token }}
           BLOG_BATCH_SIZE: ${{ needs.us-schedule-check.outputs.batch_size }}
