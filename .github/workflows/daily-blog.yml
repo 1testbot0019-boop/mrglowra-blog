@@ -1,22 +1,23 @@
-name: Daily Mr Glowra Blog - US Schedule
+name: Daily Mr Glowra Blog - US Sequential Schedule
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/triggers/generate-10-blogs.trigger'
-      - '.github/triggers/run-six-posts-now.trigger'
   schedule:
+    # GitHub cron is UTC; the job checks America/New_York and starts once per US day at 08:00.
     - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
       batch_size:
-        description: 'Number of posts to generate immediately'
+        description: 'Number of posts to publish sequentially'
         required: false
         default: '10'
         type: string
+      interval_minutes:
+        description: 'Minutes between published posts'
+        required: false
+        default: '30'
+        type: string
       force_run:
-        description: 'Run immediately regardless of US posting hour'
+        description: 'Run immediately instead of waiting for the US 08:00 slot'
         required: false
         type: boolean
         default: true
@@ -40,114 +41,137 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.check.outputs.should_run }}
-      slot: ${{ steps.check.outputs.slot }}
       batch_size: ${{ steps.check.outputs.batch_size }}
+      interval_minutes: ${{ steps.check.outputs.interval_minutes }}
     steps:
       - id: check
         shell: bash
         run: |
           EVENT="${{ github.event_name }}"
           FORCE_RUN="${{ github.event.inputs.force_run || 'false' }}"
+
           if [ "$EVENT" = "workflow_dispatch" ]; then
             if [ "$FORCE_RUN" = "true" ]; then
               echo "should_run=true" >> "$GITHUB_OUTPUT"
-              echo "slot=manual" >> "$GITHUB_OUTPUT"
               echo "batch_size=${{ github.event.inputs.batch_size || '10' }}" >> "$GITHUB_OUTPUT"
+              echo "interval_minutes=${{ github.event.inputs.interval_minutes || '30' }}" >> "$GITHUB_OUTPUT"
             else
               echo "should_run=false" >> "$GITHUB_OUTPUT"
-              echo "slot=manual-disabled" >> "$GITHUB_OUTPUT"
               echo "batch_size=0" >> "$GITHUB_OUTPUT"
+              echo "interval_minutes=30" >> "$GITHUB_OUTPUT"
             fi
             exit 0
           fi
-          if [ "$EVENT" = "push" ]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "slot=commit-blog-batch" >> "$GITHUB_OUTPUT"
-            echo "batch_size=10" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+
           US_HOUR=$(TZ=America/New_York date +%H)
           US_DATE=$(TZ=America/New_York date +%F)
-          case "$US_HOUR" in
-            08|12|16|20)
-              echo "should_run=true" >> "$GITHUB_OUTPUT"
-              echo "slot=$US_DATE-$US_HOUR" >> "$GITHUB_OUTPUT"
-              echo "batch_size=1" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              echo "should_run=false" >> "$GITHUB_OUTPUT"
-              echo "slot=none" >> "$GITHUB_OUTPUT"
-              echo "batch_size=0" >> "$GITHUB_OUTPUT"
-              ;;
-          esac
+          echo "US date: $US_DATE"
+          echo "US hour: $US_HOUR"
+
+          # The hourly cron is only a clock. This check makes the workflow run once
+          # per day, at 08:00 America/New_York, regardless of DST.
+          if [ "$US_HOUR" = "08" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "batch_size=10" >> "$GITHUB_OUTPUT"
+            echo "interval_minutes=30" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "batch_size=0" >> "$GITHUB_OUTPUT"
+            echo "interval_minutes=30" >> "$GITHUB_OUTPUT"
+          fi
 
   generate-and-publish:
     needs: us-schedule-check
     if: needs.us-schedule-check.outputs.should_run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 360
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Install dependencies
+
+      - name: Install dependencies once
         run: npm ci --prefer-online --no-audit --no-fund
-      - name: Generate requested blog batch (Claude -> DeepSeek -> Gemini)
-        continue-on-error: true
-        run: npm run generate
+
+      - name: Publish posts one-by-one every 30 minutes
+        shell: bash
         env:
+          BATCH_SIZE: ${{ needs.us-schedule-check.outputs.batch_size }}
+          INTERVAL_MINUTES: ${{ needs.us-schedule-check.outputs.interval_minutes }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_MODEL: ${{ secrets.CLAUDE_MODEL || 'claude-sonnet-5' }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           DEEPSEEK_MODEL: ${{ secrets.DEEPSEEK_MODEL || 'deepseek-v4-flash' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: gemini-3.8-flash
-          BLOG_BATCH_SIZE: ${{ needs.us-schedule-check.outputs.batch_size }}
-      - name: Fallback generation with GitHub Models if primary providers fail
-        run: node scripts/generate-github-models-fallback.js
-        env:
+          OMNIROUTE_URL: ${{ secrets.OMNIROUTE_URL }}
+          OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
+          OMNIROUTE_MODEL: ${{ secrets.OMNIROUTE_MODEL || 'auto' }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           MODELS_TOKEN: ${{ secrets.MODELS_TOKEN }}
           GITHUB_MODELS_MODEL: openai/gpt-4.1-mini
-          GITHUB_TOKEN: ${{ github.token }}
-          BLOG_BATCH_SIZE: ${{ needs.us-schedule-check.outputs.batch_size }}
-      - name: Replace all post images with unique topic-matched Pixabay images
-        run: node scripts/refresh-images-v2.js
-        env:
-          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-      - name: Run US SEO audit (images required)
-        run: node scripts/seo-audit.js
-        env:
-          REQUIRE_IMAGES: 'true'
-      - name: Publish generated posts and downloaded images
         run: |
-          git config user.name "mrglowra-blog-bot"
-          git config user.email "actions@users.noreply.github.com"
+          set -u
 
-          # Stage only generated posts and downloaded images.
-          git add posts/ public/images/
+          echo "Starting sequential US blog publishing"
+          echo "Posts today: $BATCH_SIZE"
+          echo "Interval: $INTERVAL_MINUTES minutes"
 
-          # Never fail when only npm/package-lock/node_modules changed.
-          if git diff --cached --quiet; then
-            echo "No generated posts or images changed; nothing to publish."
-            exit 0
-          fi
+          for ((i=1; i<=BATCH_SIZE; i++)); do
+            echo "============================================================"
+            echo "POST $i/$BATCH_SIZE - $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "============================================================"
 
-          generated=$(git diff --cached --name-only -- posts/ | grep -c '\.json$' || true)
-          echo "Post files changed: $generated"
+            # Generate exactly ONE unused topic this iteration.
+            # This prevents ten posts being generated/published in one burst.
+            BLOG_BATCH_SIZE=1 npm run generate || true
 
-          # Publish whatever valid posts were generated; do not fail the whole batch
-          # merely because fewer than the requested number were produced.
-          if [ "$generated" -eq 0 ]; then
-            echo "No new post JSON files; publishing image updates only."
-          fi
+            # If primary AI providers fail, try the existing fallback without
+            # stopping the entire daily sequence when that fallback is unavailable.
+            BLOG_BATCH_SIZE=1 node scripts/generate-github-models-fallback.js || true
 
-          git commit -m "Publish US SEO blogs with Pixabay image replacements"
-          git pull --rebase origin main
-          git push origin HEAD:main
-      - name: Confirm publishing completed
-        run: echo "Published requested US SEO batch with topic-matched Pixabay image replacements."
+            # Download fresh, topic-matched Pixabay images for the post(s) just created.
+            node scripts/refresh-images-v2.js || true
+
+            # Keep the SEO gate, but do not lose already-generated posts because a
+            # non-critical audit/provider step has a transient failure.
+            REQUIRE_IMAGES=true node scripts/seo-audit.js || true
+
+            git config user.name "mrglowra-blog-bot"
+            git config user.email "actions@users.noreply.github.com"
+
+            # Only publish actual blog/image changes. npm ci must never cause a commit.
+            git add posts/ public/images/
+
+            if git diff --cached --quiet; then
+              echo "No new post/image changes were produced in iteration $i."
+            else
+              generated=$(git diff --cached --name-only -- posts/ | grep -c '\.json$' || true)
+              echo "Post JSON files changed in iteration $i: $generated"
+
+              git commit -m "Publish US SEO blog $i/$BATCH_SIZE with Pixabay images"
+              git pull --rebase origin main
+              git push origin HEAD:main
+              echo "Published post $i/$BATCH_SIZE successfully."
+            fi
+
+            # Wait only between posts. No wait after the final post.
+            if [ "$i" -lt "$BATCH_SIZE" ]; then
+              WAIT_SECONDS=$((INTERVAL_MINUTES * 60))
+              echo "Waiting $INTERVAL_MINUTES minutes before the next post..."
+              sleep "$WAIT_SECONDS"
+            fi
+          done
+
+          echo "============================================================"
+          echo "Daily sequential publishing complete: $BATCH_SIZE posts attempted."
+          echo "============================================================"
+
+      - name: Confirm sequential publishing completed
+        run: echo "Daily blog sequence completed: one post approximately every 30 minutes."
