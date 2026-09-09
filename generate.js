@@ -3,8 +3,8 @@ const path=require('path');
 const postsDir=path.join(__dirname,'posts');
 fs.ensureDirSync(postsDir);
 const apiKey=process.env.GEMINI_API_KEY;
-const model=process.env.GEMINI_MODEL||'gemini-2.5-flash';
-const fallbackModels=[model,'gemini-2.5-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i);
+const model=process.env.GEMINI_MODEL||'gemini-3.6-flash';
+const fallbackModels=[model,'gemini-3.6-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i);
 const usTopics=[
 ['Deep Cleaning','How to Get Hard Water Stains Off Glass Shower Doors'],['Deep Cleaning','How to Remove Grease From Kitchen Cabinets Without Damaging the Finish'],['Deep Cleaning','How to Clean Grout Without Damaging Tile'],['Deep Cleaning','How to Remove Oil Stains From a Concrete Driveway'],['Deep Cleaning','How to Clean a Microwave Without Harsh Chemicals'],['Deep Cleaning','How to Remove Red Wine Stains From Carpet'],['Deep Cleaning','How to Clean Baseboards Without Damaging Painted Walls'],['Deep Cleaning','How to Remove Soap Scum From a Bathtub'],['Deep Cleaning','How to Clean Window Tracks and Sliding Door Tracks'],['Deep Cleaning','How to Clean a Glass Stovetop Without Scratches'],
 ['Home Organization','Small Kitchen Pantry Organization Ideas That Actually Save Space'],['Home Organization','How to Organize Under the Kitchen Sink Without the Clutter'],['Home Organization','How to Declutter a Messy Closet Fast'],['Home Organization','Small Apartment Storage Ideas for Renters'],['Home Organization','How to Organize a Bathroom With Almost No Counter Space'],['Home Organization','How to Create a Simple Entryway Drop Zone'],['Home Organization','How to Organize Cleaning Supplies Safely at Home'],['Home Organization','How to Organize a Refrigerator for Less Food Waste'],['Home Organization','How to Organize a Garage When You Have Limited Space'],['Home Organization','A Practical 30-Day Decluttering Plan for Busy Families'],
