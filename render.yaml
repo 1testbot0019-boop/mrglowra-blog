@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     buildCommand: npm install
-    startCommand: node server.js
+    startCommand: node -r ./scripts/ui-theme.js server.js
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
