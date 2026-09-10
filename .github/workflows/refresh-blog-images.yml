@@ -2,15 +2,25 @@ name: Refresh Blog Images
 
 on:
   workflow_dispatch:
+  # Run automatically when the image-matching engine changes so the whole
+  # existing library is rebuilt immediately with fresh, topic-relevant photos.
+  push:
+    paths:
+      - 'scripts/refresh-images-v2.js'
   schedule:
     - cron: '15 5 * * 0'
 
 permissions:
   contents: write
 
+concurrency:
+  group: mrglowra-image-refresh
+  cancel-in-progress: false
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -22,7 +32,7 @@ jobs:
         with:
           node-version: 20
 
-      - name: Refresh all blog images with Pixabay
+      - name: Refresh every post with unique, topic-matched Pixabay photos
         run: node scripts/refresh-images-v2.js
         env:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
@@ -34,7 +44,6 @@ jobs:
           git config user.name "mrglowra-blog-bot"
           git config user.email "actions@users.noreply.github.com"
 
-          # Only publish post/image changes. Ignore package-lock or node_modules changes.
           git add posts/ public/images/
 
           if git diff --cached --quiet; then
@@ -42,6 +51,6 @@ jobs:
             exit 0
           fi
 
-          git commit -m "Refresh blog images with topic-matched Pixabay photos"
+          git commit -m "Replace repeated blog photos with relevant Pixabay images"
           git pull --rebase origin main
           git push origin HEAD:main
