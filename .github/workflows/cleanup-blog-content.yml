@@ -1,14 +1,18 @@
-name: Clean Blog Content and Images
+name: Clean Blog Content
 
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'posts/**'
+    paths:
+      - 'scripts/sanitize-posts.js'
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: mrglowra-content-cleanup
+  cancel-in-progress: false
 
 jobs:
   cleanup:
@@ -25,15 +29,17 @@ jobs:
       - name: Remove Markdown formatting from posts
         run: node scripts/sanitize-posts.js
 
-      - name: Replace images with topic-matched free-source images
-        run: node scripts/refresh-images.js
-        env:
-          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
-
-      - name: Commit cleanup
+      - name: Commit cleaned post content only
+        shell: bash
         run: |
+          set -e
           git config user.name "mrglowra-blog-bot"
           git config user.email "actions@users.noreply.github.com"
           git add posts/
-          git diff --cached --quiet || git commit -m "Clean blog formatting and refresh article images"
-          git push
+          if git diff --cached --quiet; then
+            echo "No post content changes."
+            exit 0
+          fi
+          git commit -m "Clean blog post formatting"
+          git pull --rebase origin main
+          git push origin HEAD:main
