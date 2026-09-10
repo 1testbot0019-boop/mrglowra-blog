@@ -6,51 +6,34 @@ on:
 permissions:
   contents: write
 
-env:
-  NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
-  NPM_CONFIG_FETCH_RETRIES: 5
-  NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: 2000
-  NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: 30000
-
 jobs:
   backfill:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-
-      - name: Install locked dependencies
-        run: npm ci --prefer-online --no-audit --no-fund
-
-      - name: Match every post to a relevant Pixabay image
-        run: node scripts/refresh-images-v2.js
+      - name: Replace every post photo with title-relevant Pixabay photos
+        run: node scripts/refresh-images-v3.js
         env:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-
       - name: Commit image changes only
         shell: bash
         run: |
           set -e
           git config user.name "mrglowra-blog-bot"
           git config user.email "actions@users.noreply.github.com"
-
-          # Never commit node_modules or package-lock changes produced by tooling.
-          git restore --worktree --staged package-lock.json 2>/dev/null || true
           git add posts/ public/images/
-
           if git diff --cached --quiet; then
             echo "No post or image changes to commit."
             exit 0
           fi
-
-          git commit -m "Backfill topic-matched Pixabay images"
+          git commit -m "Backfill title-relevant Pixabay photos"
           git pull --rebase origin main
           git push origin HEAD:main
