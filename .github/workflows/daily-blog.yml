@@ -1,17 +1,19 @@
-name: Daily Mr Glowra Blog - US 30 Minute Schedule
+name: Daily Mr Glowra Blog - US 4 Post Schedule
 
 on:
   schedule:
-    # GitHub cron is UTC. These two windows cover both US daylight and standard time.
-    # The runtime gate below accepts only 08:00 through 12:30 America/New_York.
-    - cron: '0,30 12-17 * * *'
+    # GitHub cron is UTC. Runtime gate uses America/New_York so DST is handled correctly.
+    # Four daily US publishing slots: 08:00, 10:00, 12:00 and 14:00 New York time.
+    - cron: '0,30 12-20 * * *'
   workflow_dispatch:
     inputs:
       force_run:
-        description: 'Generate one blog immediately'
+        description: 'Generate four blogs immediately'
         required: false
         default: true
         type: boolean
+  push:
+    branches: [main]
 
 permissions:
   contents: write
@@ -27,9 +29,9 @@ env:
   NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: 30000
 
 jobs:
-  publish-one:
+  publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Check US publishing slot
         id: slot
@@ -38,10 +40,21 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             if [ "${{ github.event.inputs.force_run || 'true' }}" = "true" ]; then
               echo "should_run=true" >> "$GITHUB_OUTPUT"
+              echo "batch_size=4" >> "$GITHUB_OUTPUT"
             else
               echo "should_run=false" >> "$GITHUB_OUTPUT"
+              echo "batch_size=1" >> "$GITHUB_OUTPUT"
             fi
             exit 0
+          fi
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            MESSAGE="${{ github.event.head_commit.message }}"
+            if [[ "$MESSAGE" == *"[publish-now]"* ]]; then
+              echo "should_run=true" >> "$GITHUB_OUTPUT"
+              echo "batch_size=4" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           fi
 
           US_HOUR=$(TZ=America/New_York date +%H)
@@ -51,17 +64,15 @@ jobs:
           echo "US date: $US_DATE"
           echo "US time: ${US_HOUR}:${US_MINUTE}"
 
-          # Accept the 10 daily publishing slots:
-          # 08:00, 08:30, 09:00, 09:30, 10:00, 10:30,
-          # 11:00, 11:30, 12:00, 12:30 America/New_York.
-          if [ "$US_HOUR" -ge 8 ] && [ "$US_HOUR" -le 12 ]; then
-            if [ "$US_HOUR" -lt 12 ] || [ "$US_MINUTE" -lt 30 ]; then
-              echo "should_run=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
+          # Only these four slots run on the normal schedule.
+          # Cron fires every 30 minutes; the first half-hour of each slot is accepted.
+          if [ "$US_MINUTE" -lt 30 ] && { [ "$US_HOUR" = "08" ] || [ "$US_HOUR" = "10" ] || [ "$US_HOUR" = "12" ] || [ "$US_HOUR" = "14" ]; }; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "batch_size=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "batch_size=1" >> "$GITHUB_OUTPUT"
           fi
-
-          echo "should_run=false" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
         if: steps.slot.outputs.should_run == 'true'
@@ -74,15 +85,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
       - name: Install dependencies
         if: steps.slot.outputs.should_run == 'true'
         run: npm ci --prefer-online --no-audit --no-fund
 
-      - name: Generate exactly one US SEO blog
+      - name: Generate US SEO blogs
         if: steps.slot.outputs.should_run == 'true'
         env:
-          BLOG_BATCH_SIZE: '1'
+          BLOG_BATCH_SIZE: ${{ steps.slot.outputs.batch_size }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_MODEL: ${{ secrets.CLAUDE_MODEL || 'claude-sonnet-5' }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
@@ -94,11 +106,11 @@ jobs:
           OMNIROUTE_MODEL: ${{ secrets.OMNIROUTE_MODEL || 'auto' }}
         run: npm run generate
 
-      - name: Download topic-matched Pixabay images
+      - name: Download title-matched unique Pixabay image
         if: steps.slot.outputs.should_run == 'true'
         env:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-        run: node scripts/refresh-images-v2.js
+        run: node scripts/refresh-images-v3.js
 
       - name: Run SEO audit
         if: steps.slot.outputs.should_run == 'true'
@@ -106,31 +118,24 @@ jobs:
           REQUIRE_IMAGES: 'true'
         run: node scripts/seo-audit.js || true
 
-      - name: Commit and publish one post
+      - name: Commit and publish blogs
         if: steps.slot.outputs.should_run == 'true'
         shell: bash
         run: |
+          set -e
           git config user.name "mrglowra-blog-bot"
           git config user.email "actions@users.noreply.github.com"
-
-          # Only blog content and downloaded images are published.
-          # package-lock.json and node_modules are never staged.
           git add posts/ public/images/
-
           if git diff --cached --quiet; then
             echo "No new blog/image changes were generated."
             exit 1
           fi
-
-          echo "Files to publish:"
           git diff --cached --name-only
-
-          git commit -m "Publish one US SEO blog with Pixabay images"
+          git commit -m "Publish US SEO blogs with unique title-matched photos"
           git pull --rebase origin main
           git push origin HEAD:main
+          echo "US blog publication completed."
 
-          echo "One US blog published successfully."
-
-      - name: Skip non-US-slot invocation
+      - name: Skip non-slot invocation
         if: steps.slot.outputs.should_run != 'true'
-        run: echo "This cron invocation is outside the 10 US publishing slots; nothing to publish."
+        run: echo "Outside the four New York publishing slots; nothing to publish."
