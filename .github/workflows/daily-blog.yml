@@ -2,8 +2,6 @@ name: Daily Mr Glowra Blog - US 4 Post Schedule
 
 on:
   schedule:
-    # GitHub cron is UTC. Runtime gate uses America/New_York so DST is handled correctly.
-    # Four daily US publishing slots: 08:00, 10:00, 12:00 and 14:00 New York time.
     - cron: '0,30 12-20 * * *'
   workflow_dispatch:
     inputs:
@@ -31,7 +29,7 @@ env:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Check US publishing slot
         id: slot
@@ -60,12 +58,9 @@ jobs:
           US_HOUR=$(TZ=America/New_York date +%H)
           US_MINUTE=$(TZ=America/New_York date +%M)
           US_DATE=$(TZ=America/New_York date +%F)
-
           echo "US date: $US_DATE"
           echo "US time: ${US_HOUR}:${US_MINUTE}"
 
-          # Only these four slots run on the normal schedule.
-          # Cron fires every 30 minutes; the first half-hour of each slot is accepted.
           if [ "$US_MINUTE" -lt 30 ] && { [ "$US_HOUR" = "08" ] || [ "$US_HOUR" = "10" ] || [ "$US_HOUR" = "12" ] || [ "$US_HOUR" = "14" ]; }; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "batch_size=1" >> "$GITHUB_OUTPUT"
@@ -85,11 +80,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
       - name: Install dependencies
         if: steps.slot.outputs.should_run == 'true'
-        run: npm ci --prefer-online --no-audit --no-fund
+        run: npm install --prefer-online --no-audit --no-fund
 
       - name: Generate US SEO blogs
         if: steps.slot.outputs.should_run == 'true'
@@ -103,7 +97,7 @@ jobs:
           GEMINI_MODEL: gemini-3.8-flash
           OMNIROUTE_URL: ${{ secrets.OMNIROUTE_URL }}
           OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
-          OMNIROUTE_MODEL: ${{ secrets.OMNIROUTE_MODEL || 'auto' }}
+          OMNIROUTE_MODEL: ${{ secrets.OMNIROUTE_MODEL || 'deepseek-chat' }}
         run: npm run generate
 
       - name: Download title-matched unique Pixabay image
@@ -131,7 +125,7 @@ jobs:
             exit 1
           fi
           git diff --cached --name-only
-          git commit -m "Publish US SEO blogs with unique title-matched photos"
+          git commit -m "Publish US SEO blogs with unique title-matched photos [publish-now]"
           git pull --rebase origin main
           git push origin HEAD:main
           echo "US blog publication completed."
